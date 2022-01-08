@@ -71,11 +71,26 @@ class Depatcher:
 
       employee_md_depatched = np.array([sum([current_est[j, i] for j in non_ma_index if current_est[j, i] is not None]) for i in employee_index])
       employee_md_remain = np.clip(employee_md_total - employee_md_depatched, 0, sys.maxsize)
+      employee_roles = [dim_employee_intern[i].role for i in employee_index]
 
-      employee_depatch = np.array([0] * len(employee_index))
+      employee_depatch = np.array([0.0] * len(employee_index))
       project_remain = dim_project_intern[r].budget_by_time[time]
-      employee_md_remain_sort_index = np.argsort(employee_md_remain)
-      for i in employee_md_remain_sort_index[::-1]:
+      employee_md_remain_sort_index = list(np.flip(np.argsort(employee_md_remain)))
+      employee_md_remain_sort_index_with_role = []
+      employee_roles_buff = set()
+      while len(employee_md_remain_sort_index) > 0:
+        if len(employee_roles_buff) == 0:
+          employee_roles_buff = set(employee_roles)
+        employee_md_remain_sort_index_len = len(employee_md_remain_sort_index)
+        for i in range(employee_md_remain_sort_index_len):
+          if employee_roles[employee_md_remain_sort_index[i]] in employee_roles_buff:
+            employee_roles_buff.remove(employee_roles[employee_md_remain_sort_index[i]])
+            employee_md_remain_sort_index_with_role.append(employee_md_remain_sort_index.pop(i))
+            break
+        if i == (employee_md_remain_sort_index_len - 1):
+          employee_roles_buff = set(employee_roles)
+
+      for i in employee_md_remain_sort_index_with_role:
         if project_remain >= employee_md_remain[i] * employee_rate[i]:
           employee_depatch[i] = employee_md_remain[i]
           project_remain -= employee_md_remain[i] * employee_rate[i]
@@ -87,7 +102,6 @@ class Depatcher:
       current_est[r, employee_index] = employee_depatch
 
       if project_remain > 0:
-        employee_roles = set([dim_employee_intern[i].role for i in employee_index])
         employee_index_expand = [
           i
           for i in range(np.size(current_est, 1))
@@ -101,11 +115,37 @@ class Depatcher:
         employee_md_total_expand = np.array([dim_employee_intern[i].md[time] for i in employee_index_expand])
         employee_md_depatched_expand = np.array([sum([current_est[j, i] for j in non_ma_index if current_est[j, i] is not None]) for i in employee_index_expand])
         employee_md_remain_expand = np.clip(employee_md_total_expand - employee_md_depatched_expand, 0, sys.maxsize)
-        coeff_expand = project_remain / sum(employee_md_remain_expand * employee_rate_expand)
-        if coeff_expand > 1:
-          raise Exception(f'cannot expend budget of project {dim_project_intern[r].name} in month {MonthConverter.int_to_month(time)} after expand on roles')
-        employee_depatch_expand = employee_md_remain_expand * coeff_expand
+        employee_roles_expand = [dim_employee_intern[i].role for i in employee_index_expand]
+
+        employee_depatch_expand = np.array([None] * len(employee_index_expand))
+        employee_md_remain_sort_index_expand = list(np.flip(np.argsort(employee_md_remain_expand)))
+        employee_md_remain_sort_index_with_role_expand = []
+        employee_roles_expand_buff = set()
+
+        while len(employee_md_remain_sort_index_expand) > 0:
+          if len(employee_roles_expand_buff) == 0:
+            employee_roles_expand_buff = set(employee_roles_expand)
+          employee_md_remain_sort_index_expand_len = len(employee_md_remain_sort_index_expand)
+          for i in range(employee_md_remain_sort_index_expand_len):
+            if employee_roles_expand[employee_md_remain_sort_index_expand[i]] in employee_roles_expand_buff:
+              employee_roles_expand_buff.remove(employee_roles_expand[employee_md_remain_sort_index_expand[i]])
+              employee_md_remain_sort_index_with_role_expand.append(employee_md_remain_sort_index_expand.pop(i))
+              break
+          if i == (employee_md_remain_sort_index_expand_len - 1):
+            employee_roles_expand_buff = set(employee_roles_expand)
+        for i in employee_md_remain_sort_index_with_role_expand:
+          if project_remain >= employee_md_remain_expand[i] * employee_rate_expand[i]:
+            employee_depatch_expand[i] = employee_md_remain_expand[i]
+            project_remain -= employee_md_remain_expand[i] * employee_rate_expand[i]
+          elif project_remain > 0:
+            employee_depatch_expand[i] = project_remain / employee_rate_expand[i]
+            project_remain = 0
+          else:
+            break
         current_est[r, employee_index_expand] = employee_depatch_expand
+
+        if project_remain > 0:
+          raise Exception(f'cannot expend budget of project {dim_project_intern[r].name} in month {MonthConverter.int_to_month(time)} after expand on roles')
 
     ma_index = [
       i
@@ -123,7 +163,7 @@ class Depatcher:
       else:
         ma_index_selected = ma_index_by_category[np.argmax([0 if e is None else e for e in ma_by_category])]
       current_est[ma_index, c] = [None] * len(ma_index)
-      current_est[ma_index_selected, c] = md_remain
+      current_est[ma_index_selected, c] = md_remain if md_remain > 0 else None
 
 
 
