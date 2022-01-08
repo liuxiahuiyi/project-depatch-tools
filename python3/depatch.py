@@ -35,7 +35,7 @@ class Depatcher:
 
   def depatch(self, time, est_intern, dim_project_intern, dim_employee_intern):
     current_est = est_intern[time]
-    if np.sum([for i in range(np.size(current_est, 0)) for j in range(np.size(current_est, 1)) if current_est[i, j] is not None]) == 0:
+    if len([current_est[i, j] for i in range(np.size(current_est, 0)) for j in range(np.size(current_est, 1)) if current_est[i, j] is not None]) == 0:
       print(f'initialized est in month {MonthConverter.int_to_month(time)}')
       return
     non_ma_index = [
@@ -99,6 +99,15 @@ class Depatcher:
       md_total = dim_employee_intern[c].md[time]
       md_depatched = sum([current_est[i, c] for i in non_ma_index if current_est[i, c] is not None])
       md_remain = md_total - md_depatched
+      ma_index_by_category = [i for i in ma_index if dim_project_intern[i].category == dim_employee_intern[c].category]
+      ma_by_category = current_est[ma_index_by_category, c]
+      if len([e for e in ma_by_category if e is not None]) == 0:
+        ma_index_selected = np.random.choice(ma_index_by_category)
+      else:
+        ma_index_selected = ma_index_by_category[np.argmax([0 if e is None else e for e in ma_by_category])]
+      current_est[ma_index, c] = [None] * len(ma_index)
+      current_est[ma_index_selected, c] = md_remain
+
 
 
   def updateCross(self, time, est_or_act, cross_intern, dim_project_intern, dim_employee_intern):
