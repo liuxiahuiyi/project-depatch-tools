@@ -86,7 +86,7 @@ class Depatcher:
              dim_project_intern[r].category == dim_employee_intern[i].category and
              dim_employee_intern[i].rate[time] is not None and
              dim_employee_intern[i].md[time] is not None and
-             i is not in employee_index
+             i not in employee_index
         ]
         employee_rate_expand = np.array([dim_employee_intern[i].rate[time] for i in employee_index_expand])
         employee_md_total_expand = np.array([dim_employee_intern[i].md[time] for i in employee_index_expand])
