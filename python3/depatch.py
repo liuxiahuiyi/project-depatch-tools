@@ -3,6 +3,7 @@ from openpyxl import Workbook
 from datetime import datetime
 
 import numpy as np
+import sys
 
 from schema import DimProject, DimEmployee
 from util import MonthConverter
@@ -69,26 +70,33 @@ class Depatcher:
         raise Exception(f'unknown employee md for project {dim_project_intern[r].name} in month {MonthConverter.int_to_month(time)}')
 
       employee_md_depatched = np.array([sum([current_est[j, i] for j in non_ma_index if current_est[j, i] is not None]) for i in employee_index])
-      employee_md_remain = employee_md_total - employee_md_depatched
-      if sum(employee_md_remain * employee_rate) < 0.95 * dim_project_intern[r].budget_by_time[time]:
+      employee_md_remain = np.clip(employee_md_total - employee_md_depatched, 0, sys.maxsize)
+
+      coeff = dim_project_intern[r].budget_by_time[time] / sum(employee_md_remain * employee_rate)
+      employee_depatch = employee_md_remain * min(coeff, 1)
+      current_est[r, employee_index] = employee_depatch
+
+      if coeff > 1:
+        project_remain = dim_project_intern[r].budget_by_time[time] - sum(employee_md_remain * employee_rate)
         employee_roles = set([dim_employee_intern[i].role for i in employee_index])
-        employee_index = [
+        employee_index_expand = [
           i
           for i in range(np.size(current_est, 1))
           if dim_employee_intern[i].role in employee_roles and
              dim_project_intern[r].category == dim_employee_intern[i].category and
              dim_employee_intern[i].rate[time] is not None and
-             dim_employee_intern[i].md[time] is not None
+             dim_employee_intern[i].md[time] is not None and
+             i is not in employee_index
         ]
-        employee_rate = np.array([dim_employee_intern[i].rate[time] for i in employee_index])
-        employee_md_total = np.array([dim_employee_intern[i].md[time] for i in employee_index])
-        employee_md_depatched = np.array([sum([current_est[j, i] for j in non_ma_index if current_est[j, i] is not None]) for i in employee_index])
-        employee_md_remain = employee_md_total - employee_md_depatched
-
-      coeff = dim_project_intern[r].budget_by_time[time] / sum(employee_md_remain * employee_rate)
-      employee_depatch = employee_md_remain * coeff
-
-      current_est[r, employee_index] = employee_depatch
+        employee_rate_expand = np.array([dim_employee_intern[i].rate[time] for i in employee_index_expand])
+        employee_md_total_expand = np.array([dim_employee_intern[i].md[time] for i in employee_index_expand])
+        employee_md_depatched_expand = np.array([sum([current_est[j, i] for j in non_ma_index if current_est[j, i] is not None]) for i in employee_index_expand])
+        employee_md_remain_expand = np.clip(employee_md_total_expand - employee_md_depatched_expand, 0, sys.maxsize)
+        coeff_expand = project_remain / sum(employee_md_remain_expand * employee_rate_expand)
+        if coeff_expand > 1:
+          raise Exception(f'cannot expend budget of project {dim_project_intern[r].name} in month {MonthConverter.int_to_month(time)} after expand on roles')
+        employee_depatch_expand = employee_md_remain_expand * coeff_expand
+        current_est[r, employee_index_expand] = employee_depatch_expand
 
     ma_index = [
       i
