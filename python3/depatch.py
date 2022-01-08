@@ -72,12 +72,21 @@ class Depatcher:
       employee_md_depatched = np.array([sum([current_est[j, i] for j in non_ma_index if current_est[j, i] is not None]) for i in employee_index])
       employee_md_remain = np.clip(employee_md_total - employee_md_depatched, 0, sys.maxsize)
 
-      coeff = dim_project_intern[r].budget_by_time[time] / sum(employee_md_remain * employee_rate)
-      employee_depatch = employee_md_remain * min(coeff, 1)
+      employee_depatch = np.array([0] * len(employee_index))
+      project_remain = dim_project_intern[r].budget_by_time[time]
+      employee_md_remain_sort_index = np.argsort(employee_md_remain)
+      for i in employee_md_remain_sort_index[::-1]:
+        if project_remain >= employee_md_remain[i] * employee_rate[i]:
+          employee_depatch[i] = employee_md_remain[i]
+          project_remain -= employee_md_remain[i] * employee_rate[i]
+        elif project_remain > 0:
+          employee_depatch[i] = project_remain / employee_rate[i]
+          project_remain = 0
+        else:
+          break
       current_est[r, employee_index] = employee_depatch
 
-      if coeff > 1:
-        project_remain = dim_project_intern[r].budget_by_time[time] - sum(employee_md_remain * employee_rate)
+      if project_remain > 0:
         employee_roles = set([dim_employee_intern[i].role for i in employee_index])
         employee_index_expand = [
           i
