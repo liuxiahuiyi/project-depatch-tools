@@ -152,19 +152,24 @@ class Depatcher:
       for i in range(np.size(current_est, 0))
       if dim_project_intern[i].ma_or_project == 'MA'
     ]
+    ma_project_remain = [dim_project_intern[i].budget_by_time[time] for i in ma_index]
     for c in range(np.size(current_est, 1)):
       md_total = dim_employee_intern[c].md[time]
+      rate_c = dim_employee_intern[c].rate[time]
+      if rate_c is None:
+        current_est[ma_index, c] = [None] * len(ma_index)
+        continue
       md_depatched = sum([current_est[i, c] for i in non_ma_index if current_est[i, c] is not None])
-      md_remain = md_total - md_depatched
-      ma_index_by_category = [i for i in ma_index if dim_project_intern[i].category == dim_employee_intern[c].category]
-      ma_by_category = current_est[ma_index_by_category, c]
-      if len([e for e in ma_by_category if e is not None]) == 0:
-        ma_index_selected = np.random.choice(ma_index_by_category)
+      md_remain = max(0.0, md_total - md_depatched)
+      if len([current_est[i, c] for i in ma_index if dim_project_intern[i].category == dim_employee_intern[c].category and current_est[i, c] is not None]) == 0:
+        ma_index_selected = np.argmax([ma_project_remain[i] if dim_project_intern[i].category == dim_employee_intern[c].category else -sys.maxsize for i in ma_index])
+        current_est[ma_index, c] = [None] * len(ma_index)
+        current_est[ma_index[ma_index_selected], c] = md_remain if md_remain > 0 else None
       else:
-        ma_index_selected = ma_index_by_category[np.argmax([0 if e is None else e for e in ma_by_category])]
-      current_est[ma_index, c] = [None] * len(ma_index)
-      current_est[ma_index_selected, c] = md_remain if md_remain > 0 else None
-
+        ma_index_selected = np.argmax([current_est[i, c] if dim_project_intern[i].category == dim_employee_intern[c].category and current_est[i, c] is not None else -sys.maxsize for i in ma_index])
+        current_est[ma_index, c] = [None] * len(ma_index)
+        current_est[ma_index[ma_index_selected], c] = md_remain
+      ma_project_remain[ma_index_selected] = ma_project_remain[ma_index_selected] - md_remain * rate_c
 
 
   def updateCross(self, time, est_or_act, cross_intern, dim_project_intern, dim_employee_intern):
