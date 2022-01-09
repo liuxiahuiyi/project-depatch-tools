@@ -1,5 +1,6 @@
 from util import MonthConverter
 from util import isNullVal
+from datetime import datetime
 
 class DimProject:
   def __init__(self, name, status, ma_or_project, category, budget, month_start, month_end, **budget_by_month):
@@ -23,6 +24,19 @@ class DimProject:
       else:
         raise Exception(f'illegal self time_start {self.time_start} and time_end {self.time_end}')
       self.budget_by_time = dict([(i, self.budget * percentages[i - self.time_start] if i >= self.time_start and i <= self.time_end else None) for i in range(4, 16)])
+  def updateBudgetByTime(self, time, budget_update):
+    current_time = MonthConverter.month_to_int(int(datetime.now().strftime('%m')))
+    if time < self.time_start or time > self.time_end or time >= current_time:
+      return
+    diff = budget_update - self.budget_by_time[time]
+    self.budget_by_time[time] = budget_update
+    update_times = self.time_end - current_time + 1
+    if update_times <= 0:
+      return
+    diff_per_time = diff / update_times
+    for time in range(current_time, self.time_end + 1):
+      self.budget_by_time[time] = self.budget_by_time[time] + diff_per_time
+
 
 class DimEmployee:
   def __init__(self, itcode, category, role, **rate_and_md):
