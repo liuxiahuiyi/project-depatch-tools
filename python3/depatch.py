@@ -21,8 +21,6 @@ class Depatcher:
   def exec(self):
     dim_project_intern = self.readDimProject(self.dim_project)
     dim_employee_intern = self.readDimEmployee(self.dim_employee)
-    self.updateDimProject(dim_project_intern)
-    self.updateDimEmployee(dim_employee_intern)
     project_map = dict([(f'{dim_project_intern[i].ma_or_project}{self.seperator}{dim_project_intern[i].category}{self.seperator}{dim_project_intern[i].name}', i) for i in range(len(dim_project_intern))])
     employee_map = dict([(f'{dim_employee_intern[i].category}{self.seperator}{dim_employee_intern[i].role}{self.seperator}{dim_employee_intern[i].itcode}', i) for i in range(len(dim_employee_intern))])
     est_intern = dict([(i, self.readCross(i, 'est', project_map, employee_map)) for i in range(4, 16)])
@@ -34,6 +32,8 @@ class Depatcher:
           continue
         else:
           dim_project_intern[j].updateBudgetByTime(i, project_act_expend)
+    self.updateDimProject(dim_project_intern)
+    self.updateDimEmployee(dim_employee_intern)
     for i in range(self.current_time, 16):
       self.depatch(i, est_intern, dim_project_intern, dim_employee_intern)
     for i in range(4, 16):

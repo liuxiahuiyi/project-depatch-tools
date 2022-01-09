@@ -35,7 +35,7 @@ class DimProject:
       return
     diff_per_time = diff / update_times
     for time in range(current_time, self.time_end + 1):
-      self.budget_by_time[time] = self.budget_by_time[time] + diff_per_time
+      self.budget_by_time[time] = max(0, self.budget_by_time[time] - diff_per_time)
 
 
 class DimEmployee:
