@@ -27,7 +27,7 @@ class DimProject:
       self.budget_by_time = dict([(i, self.budget * percentages[i - self.time_start] if i >= self.time_start and i <= self.time_end else None) for i in range(4, 16)])
     self.calRemain()
   def calRemain(self):
-    self.remain = self.budget - sum([for k, v in self.budget_by_time.items if k < self.current_time and v is not None])
+    self.remain = self.budget - sum([v for k, v in self.budget_by_time.items() if k < self.current_time and v is not None])
   def updateBudgetByTime(self, time, budget_update):
     if time < self.time_start or time > self.time_end or time >= self.current_time:
       return
