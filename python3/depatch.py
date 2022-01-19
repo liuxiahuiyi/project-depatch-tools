@@ -7,6 +7,7 @@ import sys
 
 from schema import DimProject, DimEmployee
 from util import MonthConverter
+from util import isNullVal
 
 class Depatcher:
   def __init__(self, source, target):
@@ -16,15 +17,15 @@ class Depatcher:
     self.target = target
     self.dim_project = self.wb['DimProject'] if 'DimProject' in self.wb else self.wb.create_sheet('DimProject')
     self.dim_employee = self.wb['DimEmployee'] if 'DimEmployee' in self.wb else self.wb.create_sheet('DimEmployee')
-    self.est = dict([(i, self.wb[f'est_{MonthConverter.int_to_month(i)}'] if f'est_{MonthConverter.int_to_month(i)}' in self.wb else self.wb.create_sheet(f'est_{MonthConverter.int_to_month(i)}')) for i in range(4, 16)])
-    self.act = dict([(i, self.wb[f'act_{MonthConverter.int_to_month(i)}'] if f'act_{MonthConverter.int_to_month(i)}' in self.wb else self.wb.create_sheet(f'act_{MonthConverter.int_to_month(i)}')) for i in range(4, 16)])
+    self.est = self.wb['est'] if 'est' in self.wb else self.wb.create_sheet('est')
+    self.act = self.wb['act'] if 'act' in self.wb else self.wb.create_sheet('act')
   def exec(self):
     dim_project_intern = self.readDimProject(self.dim_project)
     dim_employee_intern = self.readDimEmployee(self.dim_employee)
     project_map = dict([(f'{dim_project_intern[i].ma_or_project}{self.seperator}{dim_project_intern[i].category}{self.seperator}{dim_project_intern[i].name}', i) for i in range(len(dim_project_intern))])
     employee_map = dict([(f'{dim_employee_intern[i].category}{self.seperator}{dim_employee_intern[i].role}{self.seperator}{dim_employee_intern[i].itcode}', i) for i in range(len(dim_employee_intern))])
-    est_intern = dict([(i, self.readCross(i, 'est', project_map, employee_map)) for i in range(4, 16)])
-    act_intern = dict([(i, self.readCross(i, 'act', project_map, employee_map)) for i in range(4, 16)])
+    est_intern = self.readCross('est', project_map, employee_map)
+    act_intern = self.readCross('act', project_map, employee_map)
     for i in range(4, 16):
       for j in range(np.size(act_intern[i], 0)):
         project_act_expend = sum(np.array([e if e is not None else 0.0 for e in act_intern[i][j]]) * np.array([e.rate[i] if e.rate[i] is not None else 0.0 for e in dim_employee_intern]))
@@ -36,9 +37,8 @@ class Depatcher:
     self.updateDimEmployee(dim_employee_intern)
     for i in range(self.current_time, 16):
       self.depatch(i, est_intern, dim_project_intern, dim_employee_intern)
-    for i in range(4, 16):
-      self.updateCross(i, 'est', est_intern, dim_project_intern, dim_employee_intern)
-      self.updateCross(i, 'act', act_intern, dim_project_intern, dim_employee_intern)
+    self.updateCross('est', est_intern, dim_project_intern, dim_employee_intern)
+    self.updateCross('act', act_intern, dim_project_intern, dim_employee_intern)
     self.wb.save(self.target)
 
   def depatch(self, time, est_intern, dim_project_intern, dim_employee_intern):
@@ -179,36 +179,40 @@ class Depatcher:
       ma_project_remain[ma_index_selected] = ma_project_remain[ma_index_selected] - md_remain * rate_c
 
 
-  def updateCross(self, time, est_or_act, cross_intern, dim_project_intern, dim_employee_intern):
+  def updateCross(self, est_or_act, cross_intern, dim_project_intern, dim_employee_intern):
     if est_or_act == 'est':
-      sheet = self.est[time]
+      sheet = self.est
     elif est_or_act == 'act':
-      sheet = self.act[time]
+      sheet = self.act
     else:
       raise Exception(f'unknown cross type {est_or_act}')
     for i in range(len(dim_project_intern)):
-      sheet.cell(row = 1, column = i + 2).value = f'{dim_project_intern[i].ma_or_project}{self.seperator}{dim_project_intern[i].category}{self.seperator}{dim_project_intern[i].name}'
+      sheet.cell(row = 1, column = i + 3).value = f'{dim_project_intern[i].ma_or_project}{self.seperator}{dim_project_intern[i].category}{self.seperator}{dim_project_intern[i].name}'
     for i in range(len(dim_employee_intern)):
-      sheet.cell(row = i + 2, column = 1).value = f'{dim_employee_intern[i].category}{self.seperator}{dim_employee_intern[i].role}{self.seperator}{dim_employee_intern[i].itcode}'
-    for r in range(len(dim_employee_intern)):
-      for c in range(len(dim_project_intern)):
-        sheet.cell(row = r + 2, column = c + 2).value = cross_intern[time][c, r]
+      for j in range(4, 16):
+        sheet.cell(row = i * 12 + j - 2, column = 1).value = MonthConverter.int_to_month(j)
+        sheet.cell(row = i * 12 + j - 2, column = 2).value = f'{dim_employee_intern[i].category}{self.seperator}{dim_employee_intern[i].role}{self.seperator}{dim_employee_intern[i].itcode}'
+    for i in range(len(dim_project_intern)):
+      for j in range(len(dim_employee_intern)):
+        for k in range(4, 16):
+          sheet.cell(row = j * 12 + k - 2, column = i + 3).value = cross_intern[k][i, j]
 
-  def readCross(self, time, est_or_act, project_map, employee_map):
-    cross_intern = np.array([[None] * len(employee_map)] * len(project_map))
+  def readCross(self, est_or_act, project_map, employee_map):
+    cross_intern = dict([(i, np.array([[None] * len(employee_map)] * len(project_map))) for i in range(4, 16)])
     if est_or_act == 'est':
-      sheet = self.est[time]
+      sheet = self.est
     elif est_or_act == 'act':
-      sheet = self.act[time]
+      sheet = self.act
     else:
       raise Exception(f'unknown cross type {est_or_act}')
-    for c in range(2, sheet.max_column + 1):
+    for c in range(3, sheet.max_column + 1):
       for r in range(2, sheet.max_row + 1):
         project = sheet.cell(row = 1, column = c).value
-        employee = sheet.cell(row = r, column = 1).value
-        value =  sheet.cell(row = r, column = c).value
-        if value is not None and value != '':
-          cross_intern[project_map[project], employee_map[employee]] = float(value)
+        employee = sheet.cell(row = r, column = 2).value
+        time = MonthConverter.month_to_int(int(sheet.cell(row = r, column = 1).value))
+        value = sheet.cell(row = r, column = c).value
+        if not isNullVal(value):
+          cross_intern[time][project_map[project], employee_map[employee]] = float(value)
     return cross_intern
 
 
@@ -230,7 +234,7 @@ class Depatcher:
         budget = dim_project.cell(row = r, column = title_column_map['budget']).value,
         month_start = dim_project.cell(row = r, column = title_column_map['month_start']).value,
         month_end = dim_project.cell(row = r, column = title_column_map['month_end']).value,
-        budget_by_month = {k: dim_project.cell(row = r, column = v).value for k, v in title_column_map.items() if k not in ['name', 'status', 'ma_or_project', 'category', 'budget', 'month_start', 'month_end']}
+        budget_by_month = {k: dim_project.cell(row = r, column = v).value for k, v in title_column_map.items() if k not in ['name', 'status', 'ma_or_project', 'category', 'budget', 'month_start', 'month_end', 'remain']}
       )
       dim_project_intern.append(row)
       dim_project_intern.sort(key = lambda e: f'{e.ma_or_project}{e.category}{e.name}')
@@ -243,8 +247,9 @@ class Depatcher:
     self.dim_project.cell(row = 1, column = 5).value = 'budget'
     self.dim_project.cell(row = 1, column = 6).value = 'month_start'
     self.dim_project.cell(row = 1, column = 7).value = 'month_end'
+    self.dim_project.cell(row = 1, column = 8).value = 'remain'
     for i in range(4, 16):
-      self.dim_project.cell(row = 1, column = 4 + i).value = f'budget_by_month_{MonthConverter.int_to_month(i)}'
+      self.dim_project.cell(row = 1, column = 5 + i).value = f'budget_by_month_{MonthConverter.int_to_month(i)}'
     for r in range(len(dim_project_intern)):
       self.dim_project.cell(row = r + 2, column = 1).value = dim_project_intern[r].name
       self.dim_project.cell(row = r + 2, column = 2).value = dim_project_intern[r].status
@@ -253,8 +258,9 @@ class Depatcher:
       self.dim_project.cell(row = r + 2, column = 5).value = dim_project_intern[r].budget
       self.dim_project.cell(row = r + 2, column = 6).value = MonthConverter.int_to_month(dim_project_intern[r].time_start)
       self.dim_project.cell(row = r + 2, column = 7).value = MonthConverter.int_to_month(dim_project_intern[r].time_end)
+      self.dim_project.cell(row = r + 2, column = 8).value = dim_project_intern[r].remain
       for c in range(4, 16):
-        self.dim_project.cell(row = r + 2, column = c + 4).value = dim_project_intern[r].budget_by_time[c]
+        self.dim_project.cell(row = r + 2, column = c + 5).value = dim_project_intern[r].budget_by_time[c]
 
   def readDimEmployee(self, dim_employee):
     title_column_map = {}

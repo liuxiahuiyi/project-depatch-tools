@@ -4,6 +4,7 @@ from datetime import datetime
 
 class DimProject:
   def __init__(self, name, status, ma_or_project, category, budget, month_start, month_end, **budget_by_month):
+    self.current_time = MonthConverter.month_to_int(int(datetime.now().strftime('%m')))
     self.name = name
     self.status = status
     self.ma_or_project = ma_or_project
@@ -24,18 +25,21 @@ class DimProject:
       else:
         raise Exception(f'illegal self time_start {self.time_start} and time_end {self.time_end}')
       self.budget_by_time = dict([(i, self.budget * percentages[i - self.time_start] if i >= self.time_start and i <= self.time_end else None) for i in range(4, 16)])
+    self.calRemain()
+  def calRemain(self):
+    self.remain = self.budget - sum([for k, v in self.budget_by_time.items if k < self.current_time and v is not None])
   def updateBudgetByTime(self, time, budget_update):
-    current_time = MonthConverter.month_to_int(int(datetime.now().strftime('%m')))
-    if time < self.time_start or time > self.time_end or time >= current_time:
+    if time < self.time_start or time > self.time_end or time >= self.current_time:
       return
     diff = budget_update - self.budget_by_time[time]
     self.budget_by_time[time] = budget_update
-    update_times = self.time_end - current_time + 1
+    update_times = self.time_end - self.current_time + 1
     if update_times <= 0:
       return
     diff_per_time = diff / update_times
-    for time in range(current_time, self.time_end + 1):
-      self.budget_by_time[time] = max(0, self.budget_by_time[time] - diff_per_time)
+    for time in range(self.current_time, self.time_end + 1):
+      self.budget_by_time[time] = self.budget_by_time[time] - diff_per_time
+    self.calRemain()
 
 
 class DimEmployee:
