@@ -28,10 +28,10 @@ class Depatcher:
     act_intern = self.readCross('act', project_map, employee_map)
     for i in range(4, 16):
       for j in range(np.size(act_intern[i], 0)):
-        project_act_expend = sum(np.array([e if e is not None else 0.0 for e in act_intern[i][j]]) * np.array([e.rate[i] if e.rate[i] is not None else 0.0 for e in dim_employee_intern]))
-        if project_act_expend == 0:
+        if len([e for e in act_intern[i][j] if e is not None]) == 0:
           continue
         else:
+          project_act_expend = sum(np.array([e if e is not None else 0.0 for e in act_intern[i][j]]) * np.array([e.rate[i] if e.rate[i] is not None else 0.0 for e in dim_employee_intern]))
           dim_project_intern[j].updateBudgetByTime(i, project_act_expend)
     self.updateDimProject(dim_project_intern)
     self.updateDimEmployee(dim_employee_intern)
