@@ -10,8 +10,10 @@ from util import MonthConverter
 from util import isNullVal
 
 class Depatcher:
-  def __init__(self, source, target):
+  def __init__(self, source, target, fiscal_year):
     self.current_time = MonthConverter.month_to_int(int(datetime.now().strftime('%m')))
+    self.current_fiscal_year = int(datetime.now().strftime('%Y')) if self.current_time <= 12 else int(datetime.now().strftime('%Y')) - 1
+    self.fiscal_year = fiscal_year
     self.seperator = '|'
     self.wb = load_workbook(source)
     self.target = target
@@ -26,13 +28,19 @@ class Depatcher:
       del self.wb['act_kdollar']
     self.act_kdollar = self.wb.create_sheet('act_kdollar')
   def exec(self):
+    if self.current_fiscal_year > self.fiscal_year:
+      return
+    elif self.current_fiscal_year == self.fiscal_year:
+      depatch_start = self.current_time
+    else:
+      depatch_start = 4
     dim_project_intern = self.readDimProject(self.dim_project)
     dim_employee_intern = self.readDimEmployee(self.dim_employee)
     project_map = dict([(f'{dim_project_intern[i].ma_or_project}{self.seperator}{dim_project_intern[i].category}{self.seperator}{dim_project_intern[i].name}', i) for i in range(len(dim_project_intern))])
     employee_map = dict([(f'{dim_employee_intern[i].category}{self.seperator}{dim_employee_intern[i].role}{self.seperator}{dim_employee_intern[i].itcode}', i) for i in range(len(dim_employee_intern))])
     est_intern = self.readCross('est', project_map, employee_map)
     act_intern = self.readCross('act', project_map, employee_map)
-    for i in range(4, 16):
+    for i in range(4, self.current_time):
       for j in range(np.size(act_intern[i], 0)):
         if len([e for e in act_intern[i][j] if e is not None]) == 0:
           continue
@@ -41,7 +49,7 @@ class Depatcher:
           dim_project_intern[j].updateBudgetByTime(i, project_act_expend)
     self.updateDimProject(dim_project_intern)
     self.updateDimEmployee(dim_employee_intern)
-    for i in range(self.current_time, 16):
+    for i in range(depatch_start, 16):
       self.depatch(i, est_intern, dim_project_intern, dim_employee_intern)
     self.updateCross('est', False, est_intern, dim_project_intern, dim_employee_intern)
     self.updateCross('est', True, est_intern, dim_project_intern, dim_employee_intern)
