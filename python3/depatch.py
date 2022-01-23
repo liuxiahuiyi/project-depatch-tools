@@ -220,7 +220,6 @@ class Depatcher:
               value = None
           else:
             value = cross_intern[k][i, j]
-          value = md * dim_employee_intern[j].rate[k] if is_kdollar and md is not None and dim_employee_intern[j].rate[k] is not None else md
           sheet.cell(row = j * 12 + k - 2, column = i + 3).value = value
     for r in range(len(dim_employee_intern) * 12 + 2, sheet.max_row + 1):
       for c in range(1, sheet.max_column + 1):
