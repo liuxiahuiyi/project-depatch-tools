@@ -18,7 +18,13 @@ class Depatcher:
     self.dim_project = self.wb['DimProject'] if 'DimProject' in self.wb else self.wb.create_sheet('DimProject')
     self.dim_employee = self.wb['DimEmployee'] if 'DimEmployee' in self.wb else self.wb.create_sheet('DimEmployee')
     self.est = self.wb['est'] if 'est' in self.wb else self.wb.create_sheet('est')
+    if 'est_kdollar' in self.wb:
+      del self.wb['est_kdollar']
+    self.est_kdollar = self.wb.create_sheet('est_kdollar')
     self.act = self.wb['act'] if 'act' in self.wb else self.wb.create_sheet('act')
+    if 'act_kdollar' in self.wb:
+      del self.wb['act_kdollar']
+    self.act_kdollar = self.wb.create_sheet('act_kdollar')
   def exec(self):
     dim_project_intern = self.readDimProject(self.dim_project)
     dim_employee_intern = self.readDimEmployee(self.dim_employee)
@@ -37,8 +43,11 @@ class Depatcher:
     self.updateDimEmployee(dim_employee_intern)
     for i in range(self.current_time, 16):
       self.depatch(i, est_intern, dim_project_intern, dim_employee_intern)
-    self.updateCross('est', est_intern, dim_project_intern, dim_employee_intern)
-    self.updateCross('act', act_intern, dim_project_intern, dim_employee_intern)
+    self.updateCross('est', False, est_intern, dim_project_intern, dim_employee_intern)
+    self.updateCross('est', True, est_intern, dim_project_intern, dim_employee_intern)
+    self.updateCross('act', False, act_intern, dim_project_intern, dim_employee_intern)
+    self.updateCross('act', True, act_intern, dim_project_intern, dim_employee_intern)
+
     self.wb.save(self.target)
 
   def depatch(self, time, est_intern, dim_project_intern, dim_employee_intern):
@@ -179,11 +188,17 @@ class Depatcher:
       ma_project_remain[ma_index_selected] = ma_project_remain[ma_index_selected] - md_remain * rate_c
 
 
-  def updateCross(self, est_or_act, cross_intern, dim_project_intern, dim_employee_intern):
+  def updateCross(self, est_or_act, is_kdollar, cross_intern, dim_project_intern, dim_employee_intern):
     if est_or_act == 'est':
-      sheet = self.est
+      if is_kdollar:
+        sheet = self.est_kdollar
+      else:
+        sheet = self.est
     elif est_or_act == 'act':
-      sheet = self.act
+      if is_kdollar:
+        sheet = self.act_kdollar
+      else:
+        sheet = self.act
     else:
       raise Exception(f'unknown cross type {est_or_act}')
     for i in range(len(dim_project_intern)):
@@ -195,7 +210,24 @@ class Depatcher:
     for i in range(len(dim_project_intern)):
       for j in range(len(dim_employee_intern)):
         for k in range(4, 16):
-          sheet.cell(row = j * 12 + k - 2, column = i + 3).value = cross_intern[k][i, j]
+          if is_kdollar:
+            if cross_intern[k][i, j] is not None:
+              if dim_employee_intern[j].rate[k] is not None:
+                value = dim_employee_intern[j].rate[k] * cross_intern[k][i, j]
+              else:
+                raise Exception(f'employee {dim_employee_intern[j].itcode} in project {dim_project_intern[i].category}{seperator}{dim_project_intern[i].name} in month {MonthConverter.int_to_month(k)}, but could not found rate')
+            else:
+              value = None
+          else:
+            value = cross_intern[k][i, j]
+          value = md * dim_employee_intern[j].rate[k] if is_kdollar and md is not None and dim_employee_intern[j].rate[k] is not None else md
+          sheet.cell(row = j * 12 + k - 2, column = i + 3).value = value
+    for r in range(len(dim_employee_intern) * 12 + 2, sheet.max_row + 1):
+      for c in range(1, sheet.max_column + 1):
+        sheet.cell(row = r, column = c).value = None
+    for r in range(1, sheet.max_row + 1):
+      for c in range(len(dim_project_intern) + 3, sheet.max_column + 1):
+        sheet.cell(row = r, column = c).value = None
 
   def readCross(self, est_or_act, project_map, employee_map):
     cross_intern = dict([(i, np.array([[None] * len(employee_map)] * len(project_map))) for i in range(4, 16)])
@@ -261,6 +293,9 @@ class Depatcher:
       self.dim_project.cell(row = r + 2, column = 8).value = dim_project_intern[r].remain
       for c in range(4, 16):
         self.dim_project.cell(row = r + 2, column = c + 5).value = dim_project_intern[r].budget_by_time[c]
+    for r in range(len(dim_project_intern) + 2, self.dim_project.max_row + 1):
+      for c in range(1, self.dim_project.max_column + 1):
+        self.dim_project.cell(row = r, column = c).value = None
 
   def readDimEmployee(self, dim_employee):
     title_column_map = {}
@@ -296,3 +331,6 @@ class Depatcher:
       for c in range(4, 16):
         self.dim_employee.cell(row = r + 2, column = c).value = dim_employee_intern[r].rate[c]
         self.dim_employee.cell(row = r + 2, column = 12 + c).value = dim_employee_intern[r].md[c]
+    for r in range(len(dim_employee_intern) + 2, self.dim_employee.max_row + 1):
+      for c in range(1, self.dim_employee.max_column + 1):
+        self.dim_employee.cell(row = r, column = c).value = None

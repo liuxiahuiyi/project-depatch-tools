@@ -3,9 +3,17 @@ from datetime import datetime
 import os
 import re
 
-workdir = os.path.abspath(os.path.dirname(__file__))
+user_dir = os.path.expanduser('~')
+workdir = None
+for e in os.walk(user_dir):
+  if 'project-depatch-tools' in e[1]:
+    workdir = os.path.join(e[0], 'project-depatch-tools')
+    break
+if workdir is None:
+  raise Exception(f'Could not found project-depatch-tools in user home')
+
 timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-tables_dir = os.path.abspath(os.path.join(workdir, '..', 'tables'))
+tables_dir = os.path.abspath(os.path.join(workdir, 'tables'))
 tables = [t for t in os.listdir(tables_dir) if re.match(r'table-\d+', t)]
 if len(tables) < 1:
   raise Exception(f'not found source table in ${tables_dir}')
